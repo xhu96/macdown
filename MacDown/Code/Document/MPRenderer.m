@@ -19,13 +19,8 @@
 #import "MPAsset.h"
 #import "MPPreferences.h"
 
-// Warning: If the version of MathJax is ever updated, please check the status
-// of https://github.com/mathjax/MathJax/issues/548. If the fix has been merged
-// in to MathJax, then the WebResourceLoadDelegate can be removed from MPDocument
-// and MathJax.js can be removed from this project.
-static NSString * const kMPMathJaxCDN =
-    @"https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.3/MathJax.js"
-    @"?config=TeX-AMS-MML_HTMLorMML";
+static NSString * const kMPMathJaxConfigQuery =
+    @"config=TeX-AMS-MML_HTMLorMML";
 static NSString * const kMPPrismScriptDirectory = @"Prism/components";
 static NSString * const kMPPrismThemeDirectory = @"Prism/themes";
 static NSString * const kMPPrismPluginDirectory = @"Prism/plugins";
@@ -57,6 +52,18 @@ NS_INLINE NSURL *MPPrismPluginURL(NSString *name, NSString *extension)
     url = [bundle URLForResource:filename withExtension:extension
                     subdirectory:dirPath];
     return url;
+}
+
+NS_INLINE NSURL *MPMathJaxScriptURL(void)
+{
+    NSBundle *bundle = [NSBundle mainBundle];
+    NSURL *url = [bundle URLForResource:@"MathJax"
+                          withExtension:@"js"
+                           subdirectory:@"MathJax"];
+    NSURLComponents *components =
+        [NSURLComponents componentsWithURL:url resolvingAgainstBaseURL:NO];
+    components.query = kMPMathJaxConfigQuery;
+    return components.URL;
 }
 
 NS_INLINE NSArray *MPPrismScriptURLsForLanguage(NSString *language)
@@ -321,7 +328,7 @@ NS_INLINE hoedown_renderer *MPCreateHTMLRenderer(MPRenderer *renderer)
     return htmlRenderer;
 }
 
-NS_INLINE hoedown_renderer *MPCreateHTMLTOCRenderer()
+NS_INLINE hoedown_renderer *MPCreateHTMLTOCRenderer(void)
 {
     hoedown_renderer *tocRenderer =
         hoedown_html_toc_renderer_new(kMPRendererTOCLevel);
@@ -422,7 +429,6 @@ NS_INLINE void MPFreeHTMLRenderer(hoedown_renderer *htmlRenderer)
 - (NSArray *)mathjaxScripts
 {
     NSMutableArray *scripts = [NSMutableArray array];
-    NSURL *url = [NSURL URLWithString:kMPMathJaxCDN];
     NSBundle *bundle = [NSBundle mainBundle];
     MPEmbeddedScript *script =
         [MPEmbeddedScript assetWithURL:[bundle URLForResource:@"init"
@@ -430,7 +436,7 @@ NS_INLINE void MPFreeHTMLRenderer(hoedown_renderer *htmlRenderer)
                                                  subdirectory:@"MathJax"]
                                andType:kMPMathJaxConfigType];
     [scripts addObject:script];
-    [scripts addObject:[MPScript javaScriptWithURL:url]];
+    [scripts addObject:[MPScript javaScriptWithURL:MPMathJaxScriptURL()]];
     return scripts;
 }
 

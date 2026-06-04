@@ -19,7 +19,6 @@
 #import "NSPasteboard+Types.h"
 #import "NSString+Lookup.h"
 #import "NSTextView+Autocomplete.h"
-#import "DOMNode+Text.h"
 #import "MPPreferences.h"
 #import "MPDocumentSplitView.h"
 #import "MPEditorView.h"
@@ -28,11 +27,77 @@
 #import "MPEditorPreferencesViewController.h"
 #import "MPExportPanelAccessoryViewController.h"
 #import "MPMathJaxListener.h"
-#import "WebView+WebViewPrivateHeaders.h"
 #import "MPToolbarController.h"
-#import <JavaScriptCore/JavaScriptCore.h>
 
 static NSString * const kMPDefaultAutosaveName = @"Untitled";
+static NSString * const kMPMathJaxScriptMessageName = @"MathJaxListener";
+
+static NSString * const kMPMathJaxBridgeScript =
+    @"window.MathJaxListener = {"
+    @"invokeCallbackForKey_: function(key) {"
+    @"window.webkit.messageHandlers.MathJaxListener.postMessage(key);"
+    @"}"
+    @"};";
+
+static NSString * const kMPPreviewBackgroundColorScript =
+    @"(function(){"
+    @"var body = document.body;"
+    @"if (!body) { return null; }"
+    @"return window.getComputedStyle(body).backgroundColor;"
+    @"})();";
+
+static NSString * const kMPPreviewHeaderLocationsScript =
+    @"(function(){"
+    @"var arr = Array.prototype.slice.call(document.querySelectorAll(\"h1, h2, h3, h4, h5, h6, img:only-child\"));"
+    @"return arr.map(function(n){ return n.getBoundingClientRect().top; });"
+    @"})();";
+
+static NSString * const kMPPreviewClearSelectionScript =
+    @"window.getSelection().removeAllRanges();";
+
+static NSString * const kMPPreviewWordCountScript =
+    @"(function(){"
+    @"function childCount(node, opt){"
+    @"var count = 0;"
+    @"for (var child = node.firstChild; child; child = child.nextSibling) {"
+    @"count += textCount(child, opt);"
+    @"}"
+    @"return count;"
+    @"}"
+    @"function wordCount(value){"
+    @"var trimmed = value.trim();"
+    @"return trimmed ? trimmed.split(/\\s+/).length : 0;"
+    @"}"
+    @"function textCount(node, opt){"
+    @"if (!node) { return 0; }"
+    @"switch (node.nodeType) {"
+    @"case Node.ELEMENT_NODE:"
+    @"case Node.DOCUMENT_NODE:"
+    @"case Node.DOCUMENT_FRAGMENT_NODE:"
+    @"var tag = node.tagName ? node.tagName.toUpperCase() : '';"
+    @"if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'HEAD') { return 0; }"
+    @"if (opt === 'words' && tag === 'CODE') {"
+    @"if (node.parentElement && node.parentElement.tagName === 'PRE') { return 0; }"
+    @"return childCount(node, opt) ? 1 : 0;"
+    @"}"
+    @"return childCount(node, opt);"
+    @"case Node.TEXT_NODE:"
+    @"case Node.CDATA_SECTION_NODE:"
+    @"var value = node.nodeValue || '';"
+    @"if (opt === 'words') { return wordCount(value); }"
+    @"if (opt === 'characters') { return value.replace(/[\\r\\n]/g, '').length; }"
+    @"return value.replace(/\\s/g, '').length;"
+    @"default:"
+    @"return 0;"
+    @"}"
+    @"}"
+    @"var root = document.body || document.documentElement;"
+    @"return {"
+    @"words: textCount(root, 'words'),"
+    @"characters: textCount(root, 'characters'),"
+    @"characterWithoutSpaces: textCount(root, 'characterWithoutSpaces')"
+    @"};"
+    @"})();";
 
 
 NS_INLINE NSString *MPEditorPreferenceKeyWithValueKey(NSString *key)
@@ -44,7 +109,7 @@ NS_INLINE NSString *MPEditorPreferenceKeyWithValueKey(NSString *key)
     return [NSString stringWithFormat:@"editor%@%@", first, rest];
 }
 
-NS_INLINE NSDictionary *MPEditorKeysToObserve()
+NS_INLINE NSDictionary *MPEditorKeysToObserve(void)
 {
     static NSDictionary *keys = nil;
     static dispatch_once_t token;
@@ -61,7 +126,7 @@ NS_INLINE NSDictionary *MPEditorKeysToObserve()
     return keys;
 }
 
-NS_INLINE NSSet *MPEditorPreferencesToObserve()
+NS_INLINE NSSet *MPEditorPreferencesToObserve(void)
 {
     static NSSet *keys = nil;
     static dispatch_once_t token;
@@ -85,20 +150,6 @@ NS_INLINE NSString *MPRectStringForAutosaveName(NSString *name)
     return rectString;
 }
 
-NS_INLINE NSColor *MPGetWebViewBackgroundColor(WebView *webview)
-{
-    DOMDocument *doc = webview.mainFrameDocument;
-    DOMNodeList *nodes = [doc getElementsByTagName:@"body"];
-    if (!nodes.length)
-        return nil;
-
-    id bodyNode = [nodes item:0];
-    DOMCSSStyleDeclaration *style = [doc getComputedStyle:bodyNode
-                                            pseudoElement:nil];
-    return [NSColor colorWithHTMLName:[style backgroundColor]];
-}
-
-
 @implementation NSURL (Convert)
 
 - (NSString *)absoluteBaseURLString
@@ -108,16 +159,6 @@ NS_INLINE NSColor *MPGetWebViewBackgroundColor(WebView *webview)
     base = [base componentsSeparatedByString:@"?"].firstObject;
     base = [base componentsSeparatedByString:@"#"].firstObject;
     return base;
-}
-
-@end
-
-
-@implementation WebView (Shortcut)
-
-- (NSScrollView *)enclosingScrollView
-{
-    return self.mainFrame.frameView.documentView.enclosingScrollView;
 }
 
 @end
@@ -172,9 +213,7 @@ NS_INLINE NSColor *MPGetWebViewBackgroundColor(WebView *webview)
 
 @interface MPDocument ()
     <NSSplitViewDelegate, NSTextViewDelegate,
-#if __MAC_OS_X_VERSION_MAX_ALLOWED >= 101100
-     WebEditingDelegate, WebFrameLoadDelegate, WebPolicyDelegate, WebResourceLoadDelegate,
-#endif
+     WKNavigationDelegate, WKUIDelegate,
      MPAutosaving, MPRendererDataSource, MPRendererDelegate>
 
 typedef NS_ENUM(NSUInteger, MPWordCountType) {
@@ -188,12 +227,14 @@ typedef NS_ENUM(NSUInteger, MPWordCountType) {
 @property (weak) IBOutlet NSView *editorContainer;
 @property (unsafe_unretained) IBOutlet MPEditorView *editor;
 @property (weak) IBOutlet NSLayoutConstraint *editorPaddingBottom;
-@property (weak) IBOutlet WebView *preview;
+@property (weak) IBOutlet NSView *previewContainer;
+@property (strong) WKWebView *preview;
 @property (weak) IBOutlet NSPopUpButton *wordCountWidget;
 @property (strong) IBOutlet MPToolbarController *toolbarController;
 @property (copy, nonatomic) NSString *autosaveName;
 @property (strong) HGMarkdownHighlighter *highlighter;
 @property (strong) MPRenderer *renderer;
+@property (strong) MPMathJaxListener *mathJaxListener;
 @property CGFloat previousSplitRatio;
 @property BOOL manualRender;
 @property BOOL copying;
@@ -221,33 +262,42 @@ typedef NS_ENUM(NSUInteger, MPWordCountType) {
 
 - (void)scaleWebview;
 - (void)syncScrollers;
--(void) updateHeaderLocations;
+- (void)updateHeaderLocations;
+- (void)updateHeaderLocationsWithCompletion:(void (^)(void))completion;
+- (void)updateEditorHeaderLocations;
+- (void)setupPreview;
+- (NSScrollView *)previewScrollView;
 
 @end
 
-static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
+static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))(void)
 {
     __weak MPDocument *weakObj = doc;
     return ^{
-        WebView *webView = weakObj.preview;
-        NSWindow *window = webView.window;
-        @synchronized(window) {
-            if (window.isFlushWindowDisabled)
-                [window enableFlushWindow];
-        }
-        [weakObj scaleWebview];
-        if (weakObj.preferences.editorSyncScrolling)
-        {
-            [weakObj updateHeaderLocations];
-            [weakObj syncScrollers];
-        }
-        else
-        {
-            NSClipView *contentView = webView.enclosingScrollView.contentView;
-            NSRect bounds = contentView.bounds;
-            bounds.origin.y = weakObj.lastPreviewScrollTop;
-            contentView.bounds = bounds;
-        }
+        MPDocument *doc = weakObj;
+        if (!doc)
+            return;
+
+        [NSAnimationContext runAnimationGroup:^(NSAnimationContext *context) {
+            context.duration = 0.0;
+            [doc scaleWebview];
+            if (doc.preferences.editorSyncScrolling)
+            {
+                [doc updateHeaderLocationsWithCompletion:^{
+                    [doc syncScrollers];
+                }];
+            }
+            else
+            {
+                NSClipView *contentView = doc.previewScrollView.contentView;
+                if (contentView)
+                {
+                    NSRect bounds = contentView.bounds;
+                    bounds.origin.y = doc.lastPreviewScrollTop;
+                    contentView.bounds = bounds;
+                }
+            }
+        } completionHandler:nil];
     };
 }
 
@@ -283,7 +333,7 @@ static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
 
 - (BOOL)previewVisible
 {
-    return (self.preview.frame.size.width != 0.0);
+    return (self.previewContainer.frame.size.width != 0.0);
 }
 
 - (BOOL)editorVisible
@@ -383,6 +433,7 @@ static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
     self.renderer = [[MPRenderer alloc] init];
     self.renderer.dataSource = self;
     self.renderer.delegate = self;
+    [self setupPreview];
 
     for (NSString *key in MPEditorPreferencesToObserve())
     {
@@ -396,10 +447,6 @@ static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
     }
 
     self.editor.postsFrameChangedNotifications = YES;
-    self.preview.frameLoadDelegate = self;
-    self.preview.policyDelegate = self;
-    self.preview.editingDelegate = self;
-    self.preview.resourceLoadDelegate = self;
 
     NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
     [center addObserver:self selector:@selector(editorTextDidChange:)
@@ -424,9 +471,13 @@ static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
                  object:self.editor.enclosingScrollView];
     if (kCFCoreFoundationVersionNumber >= kCFCoreFoundationVersionNumber10_9)
     {
-        [center addObserver:self selector:@selector(previewDidLiveScroll:)
-                       name:NSScrollViewDidEndLiveScrollNotification
-                     object:self.preview.enclosingScrollView];
+        NSScrollView *previewScrollView = self.previewScrollView;
+        if (previewScrollView)
+        {
+            [center addObserver:self selector:@selector(previewDidLiveScroll:)
+                           name:NSScrollViewDidEndLiveScrollNotification
+                         object:previewScrollView];
+        }
     }
 
     self.needsToUnregister = YES;
@@ -483,8 +534,10 @@ static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
         self.highlighter.targetTextView = nil;
         self.highlighter = nil;
         self.renderer = nil;
-        self.preview.frameLoadDelegate = nil;
-        self.preview.policyDelegate = nil;
+        [self.preview.configuration.userContentController
+            removeScriptMessageHandlerForName:kMPMathJaxScriptMessageName];
+        self.preview.navigationDelegate = nil;
+        self.preview.UIDelegate = nil;
 
         [[NSNotificationCenter defaultCenter] removeObserver:self];
 
@@ -609,8 +662,8 @@ static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
     NSPrintInfo *info = [super printInfo];
     if (!info)
         info = [[NSPrintInfo sharedPrintInfo] copy];
-    info.horizontalPagination = NSAutoPagination;
-    info.verticalPagination = NSAutoPagination;
+    info.horizontalPagination = NSPrintingPaginationModeAutomatic;
+    info.verticalPagination = NSPrintingPaginationModeAutomatic;
     info.verticallyCentered = NO;
     info.topMargin = 50.0;
     info.leftMargin = 0.0;
@@ -625,9 +678,7 @@ static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
     NSPrintInfo *info = [self.printInfo copy];
     [info.dictionary addEntriesFromDictionary:printSettings];
 
-    WebFrameView *view = self.preview.mainFrame.frameView;
-    NSPrintOperation *op = [view printOperationWithPrintInfo:info];
-    return op;
+    return [self.preview printOperationWithPrintInfo:info];
 }
 
 - (void)printDocumentWithSettings:(NSDictionary *)printSettings
@@ -830,49 +881,13 @@ static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
 }
 
 
-#pragma mark - WebResourceLoadDelegate
+#pragma mark - WKNavigationDelegate
 
-- (NSURLRequest *)webView:(WebView *)sender resource:(id)identifier willSendRequest:(NSURLRequest *)request redirectResponse:(NSURLResponse *)redirectResponse fromDataSource:(WebDataSource *)dataSource
-{
-    
-    if ([[request.URL lastPathComponent] isEqualToString:@"MathJax.js"])
-    {
-        NSURLComponents *origComps = [NSURLComponents componentsWithURL:[request URL] resolvingAgainstBaseURL:YES];
-        NSURLComponents *updatedComps = [NSURLComponents componentsWithURL:[[NSBundle mainBundle] URLForResource:@"MathJax" withExtension:@"js" subdirectory:@"MathJax"] resolvingAgainstBaseURL:NO];
-        [updatedComps setQueryItems:[origComps queryItems]];
-        
-        request = [NSURLRequest requestWithURL:[updatedComps URL]];
-    }
-    
-    return request;
-}
-
-#pragma mark - WebFrameLoadDelegate
-
-- (void)webView:(WebView *)sender didCommitLoadForFrame:(WebFrame *)frame
-{
-    NSWindow *window = sender.window;
-    @synchronized(window) {
-        if (!window.isFlushWindowDisabled)
-            [window disableFlushWindow];
-    }
-
-    // If MathJax is off, the on-completion callback will be invoked directly
-    // when loading is done (in -webView:didFinishLoadForFrame:).
-    if (self.preferences.htmlMathJax)
-    {
-        MPMathJaxListener *listener = [[MPMathJaxListener alloc] init];
-        [listener addCallback:MPGetPreviewLoadingCompletionHandler(self)
-                       forKey:@"End"];
-        [sender.windowScriptObject setValue:listener forKey:@"MathJaxListener"];
-    }
-}
-
-- (void)webView:(WebView *)sender didFinishLoadForFrame:(WebFrame *)frame
+- (void)previewDidFinishLoadingWithMathJaxPending:(BOOL)mathJaxPending
 {
     // If MathJax is on, the on-completion callback will be invoked by the
-    // JavaScript handler injected in -webView:didCommitLoadForFrame:.
-    if (!self.preferences.htmlMathJax)
+    // JavaScript bridge installed on the WKWebView configuration.
+    if (!mathJaxPending)
     {
         id callback = MPGetPreviewLoadingCompletionHandler(self);
         NSOperationQueue *queue = [NSOperationQueue mainQueue];
@@ -893,40 +908,42 @@ static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
     self.renderToWebPending = NO;
 }
 
-- (void)webView:(WebView *)sender didFailLoadWithError:(NSError *)error
-       forFrame:(WebFrame *)frame
+- (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation
 {
-    [self webView:sender didFinishLoadForFrame:frame];
-    
-    self.alreadyRenderingInWeb = NO;
-
-    if (self.renderToWebPending)
-        [self.renderer parseAndRenderNow];
-
-    self.renderToWebPending = NO;
+    [self previewDidFinishLoadingWithMathJaxPending:self.preferences.htmlMathJax];
 }
 
-
-#pragma mark - WebPolicyDelegate
-
-- (void)webView:(WebView *)webView
-                decidePolicyForNavigationAction:(NSDictionary *)information
-        request:(NSURLRequest *)request frame:(WebFrame *)frame
-                decisionListener:(id<WebPolicyDecisionListener>)listener
+- (void)webView:(WKWebView *)webView didFailNavigation:(WKNavigation *)navigation
+      withError:(NSError *)error
 {
-    switch ([information[WebActionNavigationTypeKey] integerValue])
+    [self previewDidFinishLoadingWithMathJaxPending:NO];
+}
+
+- (void)webView:(WKWebView *)webView
+didFailProvisionalNavigation:(WKNavigation *)navigation
+      withError:(NSError *)error
+{
+    [self previewDidFinishLoadingWithMathJaxPending:NO];
+}
+
+- (void)webView:(WKWebView *)webView
+decidePolicyForNavigationAction:(WKNavigationAction *)navigationAction
+decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler
+{
+    NSURLRequest *request = navigationAction.request;
+    switch (navigationAction.navigationType)
     {
-        case WebNavigationTypeLinkClicked:
+        case WKNavigationTypeLinkActivated:
             // If the target is exactly as the current one, ignore.
             if ([self.currentBaseUrl isEqual:request.URL])
             {
-                [listener ignore];
+                decisionHandler(WKNavigationActionPolicyCancel);
                 return;
             }
             // If this is a different page, intercept and handle ourselves.
             else if (![self isCurrentBaseUrl:request.URL])
             {
-                [listener ignore];
+                decisionHandler(WKNavigationActionPolicyCancel);
                 [self openOrCreateFileForUrl:request.URL];
                 return;
             }
@@ -935,36 +952,9 @@ static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
         default:
             break;
     }
-    [listener use];
+    decisionHandler(WKNavigationActionPolicyAllow);
 }
 
-
-#pragma mark - WebEditingDelegate
-
-- (BOOL)webView:(WebView *)webView doCommandBySelector:(SEL)selector
-{
-    if (selector == @selector(copy:))
-    {
-        NSString *html = webView.selectedDOMRange.markupString;
-
-        // Inject the HTML content later so that it doesn't get cleared during
-        // the native copy operation.
-        [[NSOperationQueue mainQueue] addOperationWithBlock:^{
-            NSPasteboard *pb = [NSPasteboard generalPasteboard];
-            if (![pb stringForType:@"public.html"])
-                [pb setString:html forType:@"public.html"];
-        }];
-    }
-    return NO;
-}
-
-#pragma mark - WebUIDelegate
-
-- (NSUInteger)webView:(WebView *)webView
-        dragDestinationActionMaskForDraggingInfo:(id<NSDraggingInfo>)info
-{
-    return WebDragDestinationActionNone;
-}
 
 #pragma mark - MPRendererDataSource
 
@@ -1068,51 +1058,14 @@ static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
         baseUrl = self.preferences.htmlDefaultDirectoryUrl;
 
     self.manualRender = self.preferences.markdownManualRender;
-
-#if 0
-    // Unfortunately this DOM-replacing causes a lot of problems...
-    // 1. MathJax needs to be triggered.
-    // 2. Prism rendering is lost.
-    // 3. Potentially more.
-    // Essentially all JavaScript needs to be run again after we replace
-    // the DOM. I have no idea how many more problems there are, so we'll have
-    // to back off from the path for now... :(
-
-    // If we're working on the same document, try not to reload.
-    if (self.isPreviewReady && [self.currentBaseUrl isEqualTo:baseUrl])
+    if (self.preferences.htmlMathJax)
     {
-        // HACK: Ideally we should only inject the parts that changed, and only
-        // get the parts we need. For now we only get a complete HTML codument,
-        // and rely on regex to get the parts we want in the DOM.
-
-        // Use the existing tree if available, and replace the content.
-        DOMDocument *doc = self.preview.mainFrame.DOMDocument;
-        DOMNodeList *htmlNodes = [doc getElementsByTagName:@"html"];
-        if (htmlNodes.length >= 1)
-        {
-            static NSString *pattern = @"<html>(.*)</html>";
-            static int opts = NSRegularExpressionDotMatchesLineSeparators;
-
-            // Find things inside the <html> tag.
-            NSRegularExpression *regex =
-                [[NSRegularExpression alloc] initWithPattern:pattern
-                                                     options:opts error:NULL];
-            NSTextCheckingResult *result =
-                [regex firstMatchInString:html options:0
-                                    range:NSMakeRange(0, html.length)];
-            html = [html substringWithRange:[result rangeAtIndex:1]];
-
-            // Replace everything in the old <html> tag.
-            DOMElement *htmlNode = (DOMElement *)[htmlNodes item:0];
-            htmlNode.innerHTML = html;
-
-            return;
-        }
+        [self.mathJaxListener addCallback:MPGetPreviewLoadingCompletionHandler(self)
+                                   forKey:@"End"];
     }
-#endif
 
     // Reload the page if there's not valid tree to work with.
-    [self.preview.mainFrame loadHTMLString:html baseURL:baseUrl];
+    [self.preview loadHTMLString:html baseURL:baseUrl];
     self.currentBaseUrl = baseUrl;
 }
 
@@ -1169,14 +1122,18 @@ static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
 
     if (self.preferences.editorSyncScrolling)
     {
-        @synchronized(self) {
-            self.shouldHandleBoundsChange = NO;
-            if(!_inLiveScroll){
-                [self updateHeaderLocations];
-            }
-            
+        self.shouldHandleBoundsChange = NO;
+        void (^sync)(void) = ^{
             [self syncScrollers];
             self.shouldHandleBoundsChange = YES;
+        };
+        if (!_inLiveScroll)
+        {
+            [self updateHeaderLocationsWithCompletion:sync];
+        }
+        else
+        {
+            sync();
         }
     }
 }
@@ -1195,8 +1152,9 @@ static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
 
 - (void)previewDidLiveScroll:(NSNotification *)notification
 {
-    NSClipView *contentView = self.preview.enclosingScrollView.contentView;
-    self.lastPreviewScrollTop = contentView.bounds.origin.y;
+    NSClipView *contentView = self.previewScrollView.contentView;
+    if (contentView)
+        self.lastPreviewScrollTop = contentView.bounds.origin.y;
 }
 
 
@@ -1227,9 +1185,9 @@ static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
 
 - (IBAction)copyHtml:(id)sender
 {
-    // Dis-select things in WebView so that it's more obvious we're NOT
-    // respecting the selection range.
-    [self.preview setSelectedDOMRange:nil affinity:NSSelectionAffinityUpstream];
+    // Dis-select preview content so that it's clear this copies full HTML.
+    [self.preview evaluateJavaScript:kMPPreviewClearSelectionScript
+                    completionHandler:nil];
 
     // If the preview is hidden, the HTML are not updating on text change.
     // Perform one extra rendering so that the HTML is up to date, and do the
@@ -1260,7 +1218,7 @@ static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
 
     NSWindow *w = self.windowForSheet;
     [panel beginSheetModalForWindow:w completionHandler:^(NSInteger result) {
-        if (result != NSFileHandlingPanelOKButton)
+        if (result != NSModalResponseOK)
             return;
         BOOL styles = controller.stylesIncluded;
         BOOL highlighting = controller.highlightingIncluded;
@@ -1284,7 +1242,7 @@ static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
         w = [windowControllers[0] window];
 
     [panel beginSheetModalForWindow:w completionHandler:^(NSInteger result) {
-        if (result != NSFileHandlingPanelOKButton)
+        if (result != NSModalResponseOK)
             return;
 
         NSDictionary *settings = @{
@@ -1450,7 +1408,7 @@ static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
     if (location == newlineBefore + 1 && location == newlineAfter)
         [self.editor insertNewline:self];
     else
-        [self.editor insertText:@"\n\n"];
+        [self.editor insertText:@"\n\n" replacementRange:range];
 }
 
 - (IBAction)setEditorOneQuarter:(id)sender
@@ -1490,6 +1448,45 @@ static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
 
 
 #pragma mark - Private
+
+- (void)setupPreview
+{
+    WKWebViewConfiguration *configuration =
+        [[WKWebViewConfiguration alloc] init];
+    WKUserContentController *userContentController =
+        [[WKUserContentController alloc] init];
+
+    WKUserScript *mathJaxBridge =
+        [[WKUserScript alloc] initWithSource:kMPMathJaxBridgeScript
+                               injectionTime:WKUserScriptInjectionTimeAtDocumentStart
+                            forMainFrameOnly:YES];
+    [userContentController addUserScript:mathJaxBridge];
+
+    self.mathJaxListener = [[MPMathJaxListener alloc] init];
+    [userContentController addScriptMessageHandler:self.mathJaxListener
+                                              name:kMPMathJaxScriptMessageName];
+    configuration.userContentController = userContentController;
+
+    WKWebView *preview =
+        [[WKWebView alloc] initWithFrame:self.previewContainer.bounds
+                           configuration:configuration];
+    preview.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+    preview.navigationDelegate = self;
+    preview.UIDelegate = self;
+    preview.allowsMagnification = NO;
+    [self.previewContainer addSubview:preview];
+    self.preview = preview;
+}
+
+- (NSScrollView *)previewScrollView
+{
+    for (NSView *view in self.preview.subviews)
+    {
+        if ([view isKindOfClass:NSScrollView.class])
+            return (NSScrollView *)view;
+    }
+    return nil;
+}
 
 - (void)toggleSplitterCollapsingEditorPane:(BOOL)forEditorPane
 {
@@ -1627,8 +1624,8 @@ static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
     {
         BOOL editorOnRight = self.preferences.editorOnRight;
         NSArray *subviews = self.splitView.subviews;
-        if ((!editorOnRight && subviews[0] == self.preview)
-            || (editorOnRight && subviews[1] == self.preview))
+        if ((!editorOnRight && subviews[0] == self.previewContainer)
+            || (editorOnRight && subviews[1] == self.previewContainer))
         {
             [self.splitView swapViews];
             if (!self.previewVisible && self.previousSplitRatio >= 0.0)
@@ -1667,12 +1664,16 @@ static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
     if (!self.editorVisible)
     {
         // If the editor is not visible, detect preview's background color via
-        // DOM query and use it instead. This is more expensive; we should try
-        // to avoid it.
+        // script query and use it instead. This is more expensive; we should
+        // try to avoid it.
         // TODO: Is it possible to cache this until the user switches the style?
         // Will need to take account of the user MODIFIES the style without
         // switching. Complicated. This will do for now.
-        self.splitView.dividerColor = MPGetWebViewBackgroundColor(self.preview);
+        [self.preview evaluateJavaScript:kMPPreviewBackgroundColorScript
+                       completionHandler:^(id result, NSError *error) {
+            if (!self.editorVisible && [result isKindOfClass:NSString.class])
+                self.splitView.dividerColor = [NSColor colorWithHTMLName:result];
+        }];
     }
     else if (!self.previewVisible)
     {
@@ -1699,42 +1700,44 @@ static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
 
     static const CGFloat defaultSize = 14.0;
     CGFloat scale = fontSize / defaultSize;
-    
-#if 0
-    // Sadly, this doesn’t work correctly.
-    // It looks fine, but selections are offset relative to the mouse cursor.
-    NSScrollView *previewScrollView =
-    self.preview.mainFrame.frameView.documentView.enclosingScrollView;
-    NSClipView *previewContentView = previewScrollView.contentView;
-    [previewContentView scaleUnitSquareToSize:NSMakeSize(scale, scale)];
-    [previewContentView setNeedsDisplay:YES];
-#else
-    // Warning: this is private webkit API and NOT App Store-safe!
-    [self.preview setPageSizeMultiplier:scale];
-#endif
+    self.preview.pageZoom = scale;
 }
 
--(void) updateHeaderLocations
+- (void)updateHeaderLocations
 {
-    CGFloat offset = NSMinY(self.preview.enclosingScrollView.contentView.bounds);
+    [self updateHeaderLocationsWithCompletion:nil];
+}
+
+- (void)updateHeaderLocationsWithCompletion:(void (^)(void))completion
+{
+    CGFloat offset = NSMinY(self.previewScrollView.contentView.bounds);
     NSMutableArray<NSNumber *> *locations = [NSMutableArray array];
 
-    _webViewHeaderLocations = [[self.preview.mainFrame.javaScriptContext evaluateScript:@"var arr = Array.prototype.slice.call(document.querySelectorAll(\"h1, h2, h3, h4, h5, h6, img:only-child\")); arr.map(function(n){ return n.getBoundingClientRect().top })"] toArray];
-    
-    // add offset to all numbers
-    for (NSNumber *location in _webViewHeaderLocations)
-    {
-        [locations addObject:@([location floatValue] + offset)];
-    }
-    
-    _webViewHeaderLocations = [locations copy];
-    
+    [self.preview evaluateJavaScript:kMPPreviewHeaderLocationsScript
+                    completionHandler:^(id result, NSError *error) {
+        if ([result isKindOfClass:NSArray.class])
+        {
+            for (NSNumber *location in (NSArray *)result)
+            {
+                if ([location isKindOfClass:NSNumber.class])
+                    [locations addObject:@(location.floatValue + offset)];
+            }
+        }
+        self.webViewHeaderLocations = [locations copy];
+        [self updateEditorHeaderLocations];
+        if (completion)
+            completion();
+    }];
+}
 
-    // Next, cache the locations of all of the reference nodes in the editor view.
+- (void)updateEditorHeaderLocations
+{
+    NSMutableArray<NSNumber *> *locations = [NSMutableArray array];
+
+    // Cache the locations of all of the reference nodes in the editor view.
     NSInteger characterCount = 0;
     NSLayoutManager *layoutManager = [self.editor layoutManager];
     NSArray<NSString *> *documentLines = [self.editor.string componentsSeparatedByString:@"\n"];
-    [locations removeAllObjects];
 
     // These are the patterns for markdown headers and images respectively. we're only going to
     // handle images that are not inline with other text/images
@@ -1778,8 +1781,11 @@ static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
 {
     CGFloat editorContentHeight = ceilf(NSHeight(self.editor.enclosingScrollView.documentView.bounds));
     CGFloat editorVisibleHeight = ceilf(NSHeight(self.editor.enclosingScrollView.contentView.bounds));
-    CGFloat previewContentHeight = ceilf(NSHeight(self.preview.enclosingScrollView.documentView.bounds));
-    CGFloat previewVisibleHeight = ceilf(NSHeight(self.preview.enclosingScrollView.contentView.bounds));
+    NSScrollView *previewScrollView = self.previewScrollView;
+    if (!previewScrollView)
+        return;
+    CGFloat previewContentHeight = ceilf(NSHeight(previewScrollView.documentView.bounds));
+    CGFloat previewVisibleHeight = ceilf(NSHeight(previewScrollView.contentView.bounds));
     NSInteger relativeHeaderIndex = -1; // -1 is start of document, before any other header
     CGFloat currY = NSMinY(self.editor.enclosingScrollView.contentView.bounds);
     CGFloat minY = 0;
@@ -1847,9 +1853,9 @@ static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
     
     // Now we scroll percentScrolledBetweenHeaders percent between those two positions in the webview
     CGFloat previewY = topHeaderY + (bottomHeaderY - topHeaderY) * percentScrolledBetweenHeaders;
-    NSRect contentBounds = self.preview.enclosingScrollView.contentView.bounds;
+    NSRect contentBounds = previewScrollView.contentView.bounds;
     contentBounds.origin.y = previewY;
-    self.preview.enclosingScrollView.contentView.bounds = contentBounds;
+    previewScrollView.contentView.bounds = contentBounds;
 }
 
 - (void)setSplitViewDividerLocation:(CGFloat)ratio
@@ -1893,14 +1899,20 @@ static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
 
 - (void)updateWordCount
 {
-    DOMNodeTextCount count = self.preview.mainFrame.DOMDocument.textCount;
+    [self.preview evaluateJavaScript:kMPPreviewWordCountScript
+                    completionHandler:^(id result, NSError *error) {
+        if (![result isKindOfClass:NSDictionary.class])
+            return;
 
-    self.totalWords = count.words;
-    self.totalCharacters = count.characters;
-    self.totalCharactersNoSpaces = count.characterWithoutSpaces;
+        NSDictionary *count = result;
+        self.totalWords = [count[@"words"] unsignedIntegerValue];
+        self.totalCharacters = [count[@"characters"] unsignedIntegerValue];
+        self.totalCharactersNoSpaces =
+            [count[@"characterWithoutSpaces"] unsignedIntegerValue];
 
-    if (self.isPreviewReady)
-        self.wordCountWidget.enabled = YES;
+        if (self.isPreviewReady)
+            self.wordCountWidget.enabled = YES;
+    }];
 }
 
 - (BOOL)isCurrentBaseUrl:(NSURL *)another

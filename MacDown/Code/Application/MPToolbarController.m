@@ -207,6 +207,7 @@ static CGFloat itemWidth = 37;
     CGFloat itemGroupWidth = itemWidth * items.count;
     
     NSSegmentedControl *segmentedControl = [[NSSegmentedControl alloc] init];
+    segmentedControl.translatesAutoresizingMaskIntoConstraints = NO;
     segmentedControl.identifier = itemIdentifier;
     segmentedControl.segmentStyle = separated ? NSSegmentStyleSeparated : NSSegmentStyleTexturedRounded;
     segmentedControl.trackingMode = NSSegmentSwitchTrackingMomentary;
@@ -228,8 +229,11 @@ static CGFloat itemWidth = 37;
         segmentIndex++;
     }
     
-    itemGroup.maxSize = NSMakeSize(itemGroupWidth, 25);
     itemGroup.view = segmentedControl;
+    [NSLayoutConstraint activateConstraints:@[
+        [segmentedControl.widthAnchor constraintEqualToConstant:itemGroupWidth],
+        [segmentedControl.heightAnchor constraintEqualToConstant:27],
+    ]];
     
     [self->toolbarItemIdentifierObjectDictionary setObject:itemGroup forKey:itemIdentifier];
     
@@ -248,15 +252,9 @@ static CGFloat itemWidth = 37;
     NSImage *itemImage = [NSImage imageNamed:iconImageName];
     [itemImage setTemplate:YES];
     [itemImage setSize:CGSizeMake(19, 19)];
-    NSButton *itemButton = [[NSButton alloc] initWithFrame:NSMakeRect(0, 0, itemWidth, 27)];
-    itemButton.image = itemImage;
-    itemButton.imageScaling = NSImageScaleProportionallyDown;
-    itemButton.bezelStyle = NSBezelStyleTexturedRounded;
-    itemButton.focusRingType = NSFocusRingTypeDefault;
-    itemButton.target = self.document;
-    itemButton.action = action;
-    
-    toolbarItem.view = itemButton;
+    toolbarItem.image = itemImage;
+    toolbarItem.target = self.document;
+    toolbarItem.action = action;
     
     [self->toolbarItemIdentifierObjectDictionary setObject:toolbarItem forKey:itemIdentifier];
     
@@ -277,6 +275,7 @@ static CGFloat itemWidth = 37;
     [itemImage setSize:CGSizeMake(19, 19)];
     
     NSPopUpButton *popupButton = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(0, 0, 42, 27) pullsDown:YES];
+    popupButton.translatesAutoresizingMaskIntoConstraints = NO;
     popupButton.bezelStyle = NSBezelStyleTexturedRounded;
     popupButton.focusRingType = NSFocusRingTypeDefault;
     //popupButton.imageScaling = NSImageScaleProportionallyDown;
@@ -292,6 +291,10 @@ static CGFloat itemWidth = 37;
     }
     
     toolbarItem.view = popupButton;
+    [NSLayoutConstraint activateConstraints:@[
+        [popupButton.widthAnchor constraintEqualToConstant:42],
+        [popupButton.heightAnchor constraintEqualToConstant:27],
+    ]];
     
     [self->toolbarItemIdentifierObjectDictionary setObject:toolbarItem forKey:itemIdentifier];
     

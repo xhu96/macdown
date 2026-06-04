@@ -14,10 +14,7 @@
 #import "MPArgumentProcessor.h"
 
 
-const NSUInteger kMPPathEncoding = NSUTF8StringEncoding;
-
-
-NSRunningApplication *MPRunningMacDownInstance()
+NSRunningApplication *MPRunningMacDownInstance(void)
 {
     NSArray *runningInstances = [NSRunningApplication
         runningApplicationsWithBundleIdentifier:kMPApplicationSuiteName];
@@ -50,7 +47,7 @@ void MPCollectForMacDown(NSOrderedSet<NSURL *> *urls)
  * 
  * @return Piped data if any, otherwise nil.
  */
-NSData* MPPipedData() {
+NSData *MPPipedData(void) {
     NSFileHandle *stdInFileHandle = [NSFileHandle fileHandleWithStandardInput];
     // Check if stdin file handle have anything to read
     // Modified solution from http://stackoverflow.com/questions/7505777/how-do-i-check-for-nsfilehandle-has-data-available
@@ -106,16 +103,39 @@ int main(int argc, const char * argv[])
         NSMutableOrderedSet<NSURL *> *urls = [NSMutableOrderedSet orderedSet];
         for (NSString *arg in argproc.arguments)
         {
-            NSString *escaped =
-                [arg stringByAddingPercentEscapesUsingEncoding:kMPPathEncoding];
-            NSURL *url = [NSURL URLWithString:escaped relativeToURL:pwdUrl];
+            NSURL *url = arg.absolutePath
+                ? [NSURL fileURLWithPath:arg]
+                : [NSURL fileURLWithPath:arg relativeToURL:pwdUrl];
             [urls addObject:url];
         }
         MPCollectForMacDown(urls);
 
         // Launch MacDown.
-        [[NSWorkspace sharedWorkspace] launchAppWithBundleIdentifier:kMPApplicationBundleIdentifier options:NSWorkspaceLaunchDefault additionalEventParamDescriptor:nil launchIdentifier:nil];
+        NSWorkspace *workspace = [NSWorkspace sharedWorkspace];
+        NSURL *appURL =
+            [workspace URLForApplicationWithBundleIdentifier:
+             kMPApplicationBundleIdentifier];
+        if (!appURL) {
+            fprintf(stderr, "Unable to locate MacDown.app.\n");
+            return EXIT_FAILURE;
+        }
+
+        NSWorkspaceOpenConfiguration *configuration =
+            [NSWorkspaceOpenConfiguration configuration];
+        dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
+        __block NSError *launchError = nil;
+        [workspace openApplicationAtURL:appURL
+                          configuration:configuration
+                      completionHandler:
+         ^(NSRunningApplication *app, NSError *error) {
+             launchError = error;
+             dispatch_semaphore_signal(semaphore);
+         }];
+        dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
+        if (launchError) {
+            fprintf(stderr, "%s\n", launchError.localizedDescription.UTF8String);
+            return EXIT_FAILURE;
+        }
     }
     return EXIT_SUCCESS;
 }
-
