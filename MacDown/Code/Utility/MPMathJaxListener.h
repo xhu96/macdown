@@ -7,8 +7,9 @@
 //
 
 #import <Foundation/Foundation.h>
+#import <WebKit/WebKit.h>
 
-@interface MPMathJaxListener : NSObject
+@interface MPMathJaxListener : NSObject <WKScriptMessageHandler>
 
 - (void)addCallback:(void (^)(void))block forKey:(NSString *)key;
 - (void)invokeCallbackForKey:(NSString *)key;

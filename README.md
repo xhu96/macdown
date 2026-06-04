@@ -49,7 +49,7 @@ The following editor themes and CSS files are extracted from [Mou](http://mouapp
 
 If you wish to build MacDown yourself, you will need the following components/tools:
 
-* OS X SDK (10.14 or later)
+* Xcode with the macOS 11.0 SDK or later
 * Git
 * [Bundler](http://bundler.io)
 
@@ -61,7 +61,8 @@ If you wish to build MacDown yourself, you will need the following components/to
 >
 > and report back.
 
-An appropriate SDK should be bundled with Xcode 5 or later versions.
+An appropriate SDK should be bundled with recent versions of Xcode. Command
+Line Tools alone are not enough to build the Xcode workspace.
 
 ### Environment Setup
 
@@ -72,12 +73,64 @@ After cloning the repository, run the following commands inside the repository r
     bundle exec pod install
     make -C Dependency/peg-markdown-highlight
 
-and open `MacDown.xcworkspace` in Xcode. The first command initialises the dependency submodule(s) used in MacDown; the second one installs dependencies managed by CocoaPods.
+and open `MacDown.xcworkspace` in Xcode. The first command initialises the dependency submodule(s) used in MacDown; Bundler and CocoaPods install the Ruby and Cocoa dependencies.
+
+Sparkle 2 is resolved by Xcode through Swift Package Manager from
+`https://github.com/sparkle-project/Sparkle`. CocoaPods continues to manage the
+Objective-C dependencies already used by MacDown.
+
+If Apple's system Ruby fails to start CocoaPods with an ActiveSupport `Logger`
+error, run the CocoaPods step with:
+
+    bundle exec ruby -e 'require "logger"; load Gem.bin_path("cocoapods", "pod")' install
 
 Refer to the official guides of Git and CocoaPods if you need more instructions. If you run into build issues later on, try running the following commands to update dependencies:
 
     git submodule update
     bundle exec pod install
+
+### Build and Run
+
+Use the project-local runner for the normal edit/build/run loop:
+
+    ./script/build_and_run.sh
+
+It builds `MacDown.xcworkspace` with the `MacDown` scheme, quits any running
+MacDown instance, and launches the freshly built app. Additional modes:
+
+    ./script/build_and_run.sh --verify
+    ./script/build_and_run.sh --logs
+
+The script requires full Xcode, not only Command Line Tools, and prints the
+CocoaPods install command if the `Pods` directory is missing.
+
+### Updates and Signing
+
+MacDown uses Sparkle 2's `SPUStandardUpdaterController`. `Check for Updates...`
+is present in the app menu, but Sparkle is not started and the menu item remains
+disabled unless both a feed URL and EdDSA public key are supplied.
+
+Set these build settings in an `.xcconfig`, in Xcode, or on the `xcodebuild`
+command line for release builds:
+
+    MACDOWN_SPARKLE_FEED_URL=https://example.com/appcast.xml
+    MACDOWN_SPARKLE_BETA_FEED_URL=https://example.com/beta-appcast.xml
+    MACDOWN_SPARKLE_PUBLIC_ED_KEY=<sparkle-ed25519-public-key>
+
+The beta feed is optional and is used only when the existing prerelease update
+preference is enabled.
+
+Release builds enable the hardened runtime for Developer ID distribution. The
+project does not hard-code signing credentials or sandbox entitlements. Provide
+distribution signing values from your local environment or CI:
+
+    DEVELOPMENT_TEAM=<team-id>
+    CODE_SIGN_IDENTITY="Developer ID Application"
+
+After a signed archive is exported, validate the result with:
+
+    codesign -dvvv --entitlements :- MacDown.app
+    spctl -a -vv MacDown.app
 
 ### Translation
 
@@ -98,4 +151,3 @@ MacDown depends a lot on other open source projects, such as [Hoedown](https://g
 ## Tipping
 
 If you find MacDown suitable for your needs, please consider [giving me a tip through PayPal](http://macdown.uranusjr.com/faq/#donation). Or, if you prefer to buy me a drink *personally* instead, just [send me a tweet](https://twitter.com/uranusjr) when you visit [Taipei, Taiwan](http://en.wikipedia.org/wiki/Taipei), where I live. I look forward to meeting you!
-

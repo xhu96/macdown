@@ -36,21 +36,12 @@
     }
 }
 
-
-#pragma mark - WebScripting
-
-+ (BOOL)isSelectorExcludedFromWebScript:(SEL)selector
+- (void)userContentController:(WKUserContentController *)userContentController
+      didReceiveScriptMessage:(WKScriptMessage *)message
 {
-    if (selector == @selector(invokeCallbackForKey:))
-        return NO;
-    return YES;
-}
-
-+ (BOOL)isKeyExcludedFromWebScript:(const char *)name
-{
-    if (strncmp(name, "_callbacks", 10) == 0)
-        return NO;
-    return YES;
+    if (![message.body isKindOfClass:NSString.class])
+        return;
+    [self invokeCallbackForKey:message.body];
 }
 
 @end

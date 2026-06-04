@@ -8,7 +8,7 @@
 
 #import "MPMainController.h"
 #import <MASPreferences/MASPreferencesWindowController.h>
-#import <Sparkle/SUUpdater.h>
+#import <Sparkle/Sparkle.h>
 #import "MPGlobals.h"
 #import "MPUtilities.h"
 #import "NSDocumentController+Document.h"
@@ -23,6 +23,20 @@
 
 
 static NSString * const kMPTreatLastSeenStampKey = @"treatLastSeenStamp";
+
+
+NS_INLINE BOOL MPIsConfiguredInfoString(NSString *value)
+{
+    if (![value isKindOfClass:[NSString class]])
+        return NO;
+
+    NSString *trimmed =
+        [value stringByTrimmingCharactersInSet:
+         [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    return trimmed.length
+        && ![trimmed hasPrefix:@"$("]
+        && ![trimmed isEqualToString:@"\"\""];
+}
 
 
 NS_INLINE void MPOpenBundledFile(NSString *resource, NSString *extension)
@@ -50,7 +64,7 @@ NS_INLINE void MPOpenBundledFile(NSString *resource, NSString *extension)
      }];
 }
 
-NS_INLINE void treat()
+NS_INLINE void treat(void)
 {
     NSDictionary *info = MPGetDataMap(@"treats");
     NSString *name = info[@"name"];
@@ -91,8 +105,9 @@ NS_INLINE void treat()
 }
 
 
-@interface MPMainController ()
+@interface MPMainController () <NSMenuItemValidation, SPUUpdaterDelegate>
 @property (readonly) NSWindowController *preferencesWindowController;
+@property (strong) SPUStandardUpdaterController *updaterController;
 @end
 
 
@@ -102,25 +117,16 @@ NS_INLINE void treat()
 
 - (void)applicationDidFinishLaunching:(NSNotification *)notification
 {
-    // Using private API [WebCache setDisabled:YES] to disable WebView's cache
-    id webCacheClass = (id)NSClassFromString(@"WebCache");
-    if (webCacheClass) {
-// Ignoring "undeclared selector" warning
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wundeclared-selector"
-        BOOL setDisabledValue = YES;
-        NSMethodSignature *signature = [webCacheClass methodSignatureForSelector:@selector(setDisabled:)];
-        NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:signature];
-        invocation.selector = @selector(setDisabled:);
-        invocation.target = [webCacheClass class];
-        [invocation setArgument:&setDisabledValue atIndex:2];
-        [invocation invoke];
-#pragma clang diagnostic pop
-    }
     [[NSAppleEventManager sharedAppleEventManager]
         setEventHandler:self
             andSelector:@selector(openUrlSchemeAppleEvent:withReplyEvent:)
           forEventClass:kInternetEventClass andEventID:kAEGetURL];
+
+    if ([self hasSparkleConfiguration])
+        self.updaterController =
+            [[SPUStandardUpdaterController alloc]
+             initWithStartingUpdater:YES updaterDelegate:self
+             userDriverDelegate:nil];
 }
 
 // Open a file from a browser with url of the form :
@@ -215,6 +221,11 @@ NS_INLINE void treat()
     [self.preferencesWindowController showWindow:nil];
 }
 
+- (IBAction)checkForUpdates:(id)sender
+{
+    [self.updaterController checkForUpdates:sender];
+}
+
 - (IBAction)showHelp:(id)sender
 {
     MPOpenBundledFile(@"help", @"md");
@@ -252,6 +263,18 @@ NS_INLINE void treat()
     return !self.preferences.supressesUntitledDocumentOnLaunch;
 }
 
+- (BOOL)applicationSupportsSecureRestorableState:(NSApplication *)app
+{
+    return YES;
+}
+
+- (BOOL)validateMenuItem:(NSMenuItem *)menuItem
+{
+    if (menuItem.action == @selector(checkForUpdates:))
+        return self.updaterController.updater.canCheckForUpdates;
+    return YES;
+}
+
 - (void)applicationDidBecomeActive:(NSNotification *)notification
 {
     [self openPendingPipedContent];
@@ -260,13 +283,18 @@ NS_INLINE void treat()
 }
 
 
-#pragma mark - SUUpdaterDelegate
+#pragma mark - SPUUpdaterDelegate
 
-- (NSString *)feedURLStringForUpdater:(SUUpdater *)updater
+- (NSString *)feedURLStringForUpdater:(SPUUpdater *)updater
 {
-    if (self.preferences.updateIncludesPreReleases)
-        return [NSBundle mainBundle].infoDictionary[@"SUBetaFeedURL"];
-    return [NSBundle mainBundle].infoDictionary[@"SUFeedURL"];
+    NSDictionary *info = [NSBundle mainBundle].infoDictionary;
+    NSString *stableFeed = info[@"SUFeedURL"];
+    NSString *betaFeed = info[@"SUBetaFeedURL"];
+
+    if (self.preferences.updateIncludesPreReleases
+            && MPIsConfiguredInfoString(betaFeed))
+        return betaFeed;
+    return MPIsConfiguredInfoString(stableFeed) ? stableFeed : nil;
 }
 
 
@@ -307,6 +335,13 @@ NS_INLINE void treat()
                 [manager copyItemAtURL:fileSource toURL:fileTarget error:NULL];
         }
     }
+}
+
+- (BOOL)hasSparkleConfiguration
+{
+    NSDictionary *info = [NSBundle mainBundle].infoDictionary;
+    return MPIsConfiguredInfoString(info[@"SUPublicEDKey"])
+        && MPIsConfiguredInfoString(info[@"SUFeedURL"]);
 }
 
 - (void)openPendingFiles

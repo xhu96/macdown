@@ -16,9 +16,8 @@ fi
 set -o errexit
 set -o nounset
 
-pushd `dirname $0` > /dev/null
-source $(pwd -P)/utils.sh
-popd > /dev/null
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+source "$SCRIPT_DIR/utils.sh"
 
 BUILD_VERSION=$(get_build_version)
 SHORT_VERSION=$(get_short_version)
