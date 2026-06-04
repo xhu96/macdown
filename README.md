@@ -8,7 +8,7 @@ people can make crappy clones.
 This fork keeps the original MacDown app identity while modernizing the source
 for universal macOS 11+ builds on Apple Silicon and Intel Macs. The original
 project is [MacDownApp/macdown](https://github.com/MacDownApp/macdown). This
-modernization fork is maintained by [Xhulio L.](https://github.com/xhu96).
+modernization fork was prepared by [Xhulio L.](https://github.com/xhu96).
 
 Visit the historical [project site](http://macdown.uranusjr.com/) for original
 MacDown information.
@@ -163,9 +163,9 @@ Please help translation on [Transifex](https://www.transifex.com/macdown/macdown
 
 ## Discussion
 
-For this modernization fork, file issues at
-[xhu96/macdown](https://github.com/xhu96/macdown/issues). Please search first
-to make sure no-one has reported the same issue already.
+This repository is a source modernization fork, not an active support channel.
+Bug reports and pull requests may be reviewed on a best-effort basis, but there
+is no guarantee of ongoing maintenance or user support.
 
 For original upstream history and older project discussion, see
 [MacDownApp/macdown](https://github.com/MacDownApp/macdown).
@@ -180,7 +180,8 @@ MacDown depends a lot on other open source projects, such as
 [PEG Markdown Highlight](https://github.com/ali-rantakari/peg-markdown-highlight)
 for editor highlighting. If you find problems when using those particular
 features, you can also consider reporting them directly to upstream projects as
-well as to this fork’s issue tracker.
+well as checking whether the original MacDown project already documented the
+behavior.
 
 ## Tipping
 
