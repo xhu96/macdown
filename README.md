@@ -158,7 +158,8 @@ After a signed archive is exported, validate the result with:
 ### Translation
 
 Existing translations are retained from the original MacDown project. This fork
-does not currently manage a separate translation workflow or progress badge.
+also adds Albanian (`sq`). It does not currently manage a separate translation
+workflow or progress badge.
 
 ## Discussion
 

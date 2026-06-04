@@ -522,6 +522,18 @@
 		E77E5D72241C935100699B5A /* da-DK */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "da-DK"; path = "Localization/da-DK.lproj/MPDocument.strings"; sourceTree = "<group>"; };
 		E7D458CB241C933800411A36 /* fi */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = fi; path = Localization/fi.lproj/MainMenu.strings; sourceTree = "<group>"; };
 		E7DD09F1241C9368008FBC25 /* da */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = da; path = Localization/da.lproj/MainMenu.strings; sourceTree = "<group>"; };
+		C0DEC0DE0000000000000101 /* sq */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = sq; path = Localization/sq.lproj/MainMenu.strings; sourceTree = "<group>"; };
+		C0DEC0DE0000000000000102 /* sq */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = sq; path = Localization/sq.lproj/MPDocument.strings; sourceTree = "<group>"; };
+		C0DEC0DE0000000000000103 /* sq */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = sq; path = Localization/sq.lproj/MPEditorPreferencesViewController.strings; sourceTree = "<group>"; };
+		C0DEC0DE0000000000000104 /* sq */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = sq; path = Localization/sq.lproj/MPHtmlPreferencesViewController.strings; sourceTree = "<group>"; };
+		C0DEC0DE0000000000000105 /* sq */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = sq; path = Localization/sq.lproj/MPMarkdownPreferencesViewController.strings; sourceTree = "<group>"; };
+		C0DEC0DE0000000000000106 /* sq */ = {isa = PBXFileReference; lastKnownFileType = text.rtf; name = sq; path = Localization/sq.lproj/Credits.rtf; sourceTree = "<group>"; };
+		C0DEC0DE0000000000000107 /* sq */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = sq; path = Localization/sq.lproj/InfoPlist.strings; sourceTree = "<group>"; };
+		C0DEC0DE0000000000000108 /* sq */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = sq; path = Localization/sq.lproj/Localizable.strings; sourceTree = "<group>"; };
+		C0DEC0DE0000000000000109 /* sq */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = sq; path = sq.lproj/MPTerminalPreferencesViewController.strings; sourceTree = "<group>"; };
+		C0DEC0DE000000000000010A /* sq */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = sq; path = Localization/sq.lproj/MPExportPanelAccessoryViewController.strings; sourceTree = "<group>"; };
+		C0DEC0DE000000000000010B /* sq */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = sq; path = Localization/sq.lproj/MPGeneralPreferencesViewController.strings; sourceTree = "<group>"; };
+		C0DEC0DE000000000000010C /* sq */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = sq; path = sq.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -984,6 +996,7 @@
 			knownRegions = (
 				en,
 				Base,
+				sq,
 				sv,
 				"zh-Hant",
 				"zh-Hans",
@@ -1342,6 +1355,7 @@
 				E744518C241C934C00D9ABD9 /* cs */,
 				E77E5D6C241C935100699B5A /* da-DK */,
 				E7DD09F1241C9368008FBC25 /* da */,
+				C0DEC0DE0000000000000101 /* sq */,
 			);
 			name = MainMenu.xib;
 			sourceTree = "<group>";
@@ -1372,6 +1386,7 @@
 				E70ECDD7241C933C00537A46 /* ru-RU */,
 				E7445191241C934C00D9ABD9 /* cs */,
 				E77E5D72241C935100699B5A /* da-DK */,
+				C0DEC0DE0000000000000102 /* sq */,
 			);
 			name = MPDocument.xib;
 			path = ../..;
@@ -1402,6 +1417,7 @@
 				1FB813A82099A228004EC5D7 /* et */,
 				E744518F241C934C00D9ABD9 /* cs */,
 				E77E5D6F241C935100699B5A /* da-DK */,
+				C0DEC0DE0000000000000103 /* sq */,
 			);
 			name = MPEditorPreferencesViewController.xib;
 			path = ../..;
@@ -1432,6 +1448,7 @@
 				1FB813A72099A228004EC5D7 /* et */,
 				E744518E241C934C00D9ABD9 /* cs */,
 				E77E5D6D241C935100699B5A /* da-DK */,
+				C0DEC0DE0000000000000104 /* sq */,
 			);
 			name = MPHtmlPreferencesViewController.xib;
 			path = ../..;
@@ -1463,6 +1480,7 @@
 				E70ECDD6241C933C00537A46 /* ru-RU */,
 				E7445192241C934C00D9ABD9 /* cs */,
 				E77E5D71241C935100699B5A /* da-DK */,
+				C0DEC0DE0000000000000105 /* sq */,
 			);
 			name = MPMarkdownPreferencesViewController.xib;
 			path = ../..;
@@ -1485,6 +1503,7 @@
 				1F05E8BC1F36E56300E4D06C /* is */,
 				1F05E8C51F36E58800E4D06C /* ko-KR */,
 				1F05E8CE1F36E5AA00E4D06C /* pt-BR */,
+				C0DEC0DE0000000000000106 /* sq */,
 			);
 			name = Credits.rtf;
 			sourceTree = "<group>";
@@ -1507,6 +1526,7 @@
 				1F2ABCFE1F38108E005FB620 /* is */,
 				1F2ABCFF1F381090005FB620 /* fr */,
 				E7543774241C935F00F181F1 /* nl-NL */,
+				C0DEC0DE0000000000000107 /* sq */,
 			);
 			name = InfoPlist.strings;
 			sourceTree = "<group>";
@@ -1537,6 +1557,7 @@
 				E70ECDD4241C933C00537A46 /* ru-RU */,
 				E744518B241C934C00D9ABD9 /* cs */,
 				E77E5D6A241C935100699B5A /* da-DK */,
+				C0DEC0DE0000000000000108 /* sq */,
 			);
 			name = Localizable.strings;
 			sourceTree = "<group>";
@@ -1566,6 +1587,7 @@
 				1FB813A62099A228004EC5D7 /* et */,
 				E744518D241C934C00D9ABD9 /* cs */,
 				E77E5D6E241C935100699B5A /* da-DK */,
+				C0DEC0DE0000000000000109 /* sq */,
 			);
 			name = MPTerminalPreferencesViewController.xib;
 			path = ../../Localization;
@@ -1596,6 +1618,7 @@
 				1FB813A42099A228004EC5D7 /* et */,
 				E744518A241C934C00D9ABD9 /* cs */,
 				E77E5D6B241C935100699B5A /* da-DK */,
+				C0DEC0DE000000000000010A /* sq */,
 			);
 			name = MPExportPanelAccessoryViewController.xib;
 			sourceTree = "<group>";
@@ -1625,6 +1648,7 @@
 				1FB813A92099A228004EC5D7 /* et */,
 				E7445190241C934C00D9ABD9 /* cs */,
 				E77E5D70241C935100699B5A /* da-DK */,
+				C0DEC0DE000000000000010B /* sq */,
 			);
 			name = MPGeneralPreferencesViewController.xib;
 			path = ../..;
@@ -1648,6 +1672,7 @@
 				1F2ABD061F38113E005FB620 /* ko-KR */,
 				1F2ABD071F381140005FB620 /* pt-BR */,
 				1F6B58FA1F5D2ED2006559CB /* nl-NL */,
+				C0DEC0DE000000000000010C /* sq */,
 			);
 			name = InfoPlist.strings;
 			sourceTree = "<group>";
