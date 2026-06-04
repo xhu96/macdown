@@ -1,5 +1,15 @@
 # Contributing to MacDown
 
+## Modernization Fork Notes
+
+This fork modernizes MacDown for universal macOS 11+ builds on Apple Silicon and
+Intel Macs while preserving the original app identity. Build changes should keep
+that deployment target, avoid hard-coded signing credentials, and leave Sparkle
+2 inert unless a real appcast URL and EdDSA public key are configured.
+
+Use full Xcode, not only Command Line Tools, when verifying the workspace. See
+`README.md` for the current build, signing, and release validation notes.
+
 ## Coding Style
 
 All style rules are enforced under all circumstances except for external dependencies.

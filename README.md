@@ -1,17 +1,29 @@
 # MacDown
 
-[![](https://img.shields.io/github/release/MacDownApp/macdown.svg)](http://macdown.uranusjr.com/download/latest/)
-![Total downloads](https://img.shields.io/github/downloads/MacDownApp/macdown/latest/total.svg)
-[![Build Status](https://travis-ci.org/MacDownApp/macdown.svg?branch=master)](https://travis-ci.org/MacDownApp/macdown)
+MacDown is an open source Markdown editor for macOS, released under the MIT
+License. The author stole the idea from
+[Chen Luo](https://twitter.com/chenluois)’s [Mou](http://mouapp.com) so that
+people can make crappy clones.
 
+This fork keeps the original MacDown app identity while modernizing the source
+for universal macOS 11+ builds on Apple Silicon and Intel Macs. The original
+project is [MacDownApp/macdown](https://github.com/MacDownApp/macdown). This
+modernization fork is maintained by [Xhulio L.](https://github.com/xhu96).
 
-MacDown is an open source Markdown editor for OS X, released under the MIT License. The author stole the idea from [Chen Luo](https://twitter.com/chenluois)’s [Mou](http://mouapp.com) so that people can make crappy clones.
-
-Visit the [project site](http://macdown.uranusjr.com/) for more information, or download [MacDown.app.zip](http://macdown.uranusjr.com/download/latest/) directly from the [latest releases](https://github.com/MacDownApp/macdown/releases/latest) page.
+Visit the historical [project site](http://macdown.uranusjr.com/) for original
+MacDown information.
 
 ## Install
 
-[Download](http://macdown.uranusjr.com/download/latest/), unzip, and drag the app to Applications folder. MacDown is also available through [Homebrew Cask](https://caskroom.github.io/):
+This fork currently publishes source changes, not fork-owned notarized binary
+releases. To try the Apple Silicon/macOS modernization, build the app locally
+from `MacDown.xcworkspace` or use the helper script in the
+[Build and Run](#build-and-run) section.
+
+Historical upstream binaries and the Homebrew Cask may still be available from
+the original project, but they are not produced by this fork and may not include
+the Apple Silicon/macOS 11+ modernization. For reference, the historical cask
+command is:
 
     brew install --cask macdown
 
@@ -49,20 +61,17 @@ The following editor themes and CSS files are extracted from [Mou](http://mouapp
 
 If you wish to build MacDown yourself, you will need the following components/tools:
 
-* Xcode with the macOS 11.0 SDK or later
+* Full Xcode with the macOS 11.0 SDK or later
 * Git
 * [Bundler](http://bundler.io)
 
 > Note: Old versions of CocoaPods are not supported. Please use Bundler to execute CocoaPods, or make sure your CocoaPods is later than shown in `Gemfile.lock`.
 
-> Note: The Command Line Tools (CLT) should be unnecessary. If you failed to compile without it, please install CLT with
->
->     xcode-select --install
->
-> and report back.
+An appropriate SDK is bundled with recent versions of Xcode. Command Line Tools
+alone are not enough to build the Xcode workspace.
 
-An appropriate SDK should be bundled with recent versions of Xcode. Command
-Line Tools alone are not enough to build the Xcode workspace.
+The project deployment target is macOS 11.0. Release builds are intended to be
+universal Apple Silicon and Intel builds when `ONLY_ACTIVE_ARCH=NO` is used.
 
 ### Environment Setup
 
@@ -73,11 +82,22 @@ After cloning the repository, run the following commands inside the repository r
     bundle exec pod install
     make -C Dependency/peg-markdown-highlight
 
-and open `MacDown.xcworkspace` in Xcode. The first command initialises the dependency submodule(s) used in MacDown; Bundler and CocoaPods install the Ruby and Cocoa dependencies.
+and open `MacDown.xcworkspace` in Xcode. The first command initialises the
+dependency submodule(s) used in MacDown; Bundler and CocoaPods install the Ruby
+and Cocoa dependencies.
 
 Sparkle 2 is resolved by Xcode through Swift Package Manager from
 `https://github.com/sparkle-project/Sparkle`. CocoaPods continues to manage the
 Objective-C dependencies already used by MacDown.
+
+For release-quality builds, install the optional Node dependencies used by the
+GitHub stylesheet generator:
+
+    (cd Tools/GitHub-style-generator && npm install)
+
+The Xcode `Transpile Styles` phase uses that generator. If these Node
+dependencies are missing, Xcode may print a `node-sass` warning and leave the
+generated `GitHub-2020.css` stylesheet empty while the app build continues.
 
 If Apple's system Ruby fails to start CocoaPods with an ActiveSupport `Logger`
 error, run the CocoaPods step with:
@@ -110,6 +130,8 @@ MacDown uses Sparkle 2's `SPUStandardUpdaterController`. `Check for Updates...`
 is present in the app menu, but Sparkle is not started and the menu item remains
 disabled unless both a feed URL and EdDSA public key are supplied.
 
+This fork does not ship a public appcast URL or Sparkle key by default.
+
 Set these build settings in an `.xcconfig`, in Xcode, or on the `xcodebuild`
 command line for release builds:
 
@@ -130,6 +152,7 @@ distribution signing values from your local environment or CI:
 After a signed archive is exported, validate the result with:
 
     codesign -dvvv --entitlements :- MacDown.app
+    lipo -archs MacDown.app/Contents/MacOS/MacDown
     spctl -a -vv MacDown.app
 
 ### Translation
@@ -140,14 +163,28 @@ Please help translation on [Transifex](https://www.transifex.com/macdown/macdown
 
 ## Discussion
 
-[![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/MacDownApp/macdown)
+For this modernization fork, file issues at
+[xhu96/macdown](https://github.com/xhu96/macdown/issues). Please search first
+to make sure no-one has reported the same issue already.
 
-Join our [Gitter channel](https://gitter.im/MacDownApp/macdown) if you have any problems with MacDown. Any suggestions are welcomed, too!
+For original upstream history and older project discussion, see
+[MacDownApp/macdown](https://github.com/MacDownApp/macdown).
 
-You can also [file an issue directly](https://github.com/MacDownApp/macdown/issues/new) on GitHub if you prefer so. But please, **search first to make sure no-one has reported the same issue already** before opening one yourself. MacDown does not update in your computer immediately when we make changes, so something you experienced might be known, or even fixed in the development version.
+MacDown does not update on your computer immediately when changes are made, so
+something you experienced might be known, or even fixed in the development
+version.
 
-MacDown depends a lot on other open source projects, such as [Hoedown](https://github.com/hoedown/hoedown) for Markdown-to-HTML rendering, [Prism](http://prismjs.com) for syntax highlighting (in code blocks), and [PEG Markdown Highlight](https://github.com/ali-rantakari/peg-markdown-highlight) for editor highlighting. If you find problems when using those particular features, you can also consider reporting them directly to upstream projects as well as to MacDown’s issue tracker. I will do what I can if you report it here, but sometimes it can be more beneficial to interact with them directly.
+MacDown depends a lot on other open source projects, such as
+[Hoedown](https://github.com/hoedown/hoedown) for Markdown-to-HTML rendering,
+[Prism](http://prismjs.com) for syntax highlighting in code blocks, and
+[PEG Markdown Highlight](https://github.com/ali-rantakari/peg-markdown-highlight)
+for editor highlighting. If you find problems when using those particular
+features, you can also consider reporting them directly to upstream projects as
+well as to this fork’s issue tracker.
 
 ## Tipping
+
+This note is retained from the original upstream project for the original
+author.
 
 If you find MacDown suitable for your needs, please consider [giving me a tip through PayPal](http://macdown.uranusjr.com/faq/#donation). Or, if you prefer to buy me a drink *personally* instead, just [send me a tweet](https://twitter.com/uranusjr) when you visit [Taipei, Taiwan](http://en.wikipedia.org/wiki/Taipei), where I live. I look forward to meeting you!
