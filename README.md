@@ -13,6 +13,31 @@ modernization fork was prepared by [Xhulio L.](https://github.com/xhu96).
 Visit the historical [project site](http://macdown.uranusjr.com/) for original
 MacDown information.
 
+## What Changed in This Fork
+
+This fork modernizes MacDown so it can be built and used on current macOS
+systems while preserving the original app identity.
+
+Key changes:
+
+* Universal macOS 11+ project settings for Apple Silicon and Intel Macs.
+* Updated Xcode build configuration for modern macOS SDKs.
+* Sparkle 2 integration through Swift Package Manager.
+* Restored `Check for Updates...` flow, disabled until a real appcast URL and
+  public key are configured.
+* Developer ID-ready Release settings with hardened runtime guidance.
+* Removed legacy architecture/deployment settings such as old Intel-only
+  assumptions.
+* Added `script/build_and_run.sh` for local build, launch, verification, and
+  logs.
+* Updated documentation for source-first distribution instead of unsupported
+  old binaries.
+* Added Albanian (`sq`) localization.
+* Added modernization credits for Xhulio L.
+
+This is a source modernization fork. It does not currently ship signed/notarized
+binaries, a public Sparkle appcast, or an active support channel.
+
 ## Install
 
 This fork currently publishes source changes, not fork-owned notarized binary
