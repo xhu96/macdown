@@ -20,7 +20,7 @@ Here you can get the source code, read through the issues and start contributing
 
 Contribution is not limited to software developers, since there are other ways you can help. For example, contributing towards documentation, translation and support.
 
-If you want to help translate, then you can look at our project page on [Transifex](https://www.transifex.com/macdown/macdown/) and see whether to add a new languages or complete the work of an existing language.
+Existing translations are retained from the original MacDown project. This fork does not currently manage a separate translation workflow.
 
 ## Joining the Conversation
 

@@ -157,9 +157,8 @@ After a signed archive is exported, validate the result with:
 
 ### Translation
 
-Please help translation on [Transifex](https://www.transifex.com/macdown/macdown/).
-
-![Transifex translation percentage](https://www.transifex.com/projects/p/macdown/resource/macdownxliff/chart/image_png/)
+Existing translations are retained from the original MacDown project. This fork
+does not currently manage a separate translation workflow or progress badge.
 
 ## Discussion
 
