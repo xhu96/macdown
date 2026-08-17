@@ -1,0 +1,156 @@
+name: Build unsigned v0.8.0 DMG
+
+on:
+  push:
+    branches:
+      - codex/release-v0.8.0
+    paths:
+      - .github/workflows/build-unsigned-v0.8.0.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macdown-v0.8.0-unsigned-build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      RELEASE_VERSION: 0.8.0
+      RELEASE_BUILD: 1118
+      DMG_NAME: MacDown-0.8.0-unsigned.dmg
+      ARCHIVE_PATH: ${{ runner.temp }}/MacDown.xcarchive
+      DIST_DIR: ${{ runner.temp }}/dist
+
+    steps:
+      - name: Check out source and submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Select Ruby and install bundled gems
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+
+      - name: Report build environment
+        run: |
+          set -euo pipefail
+          uname -a
+          xcodebuild -version
+          ruby --version
+          bundle --version
+          node --version
+          npm --version
+
+      - name: Install CocoaPods dependencies
+        run: |
+          set -euo pipefail
+          bundle exec pod install
+
+      - name: Build parser dependency
+        run: |
+          set -euo pipefail
+          make -C Dependency/peg-markdown-highlight
+
+      - name: Generate GitHub stylesheet with maintained Sass
+        run: |
+          set -euo pipefail
+          sass_root="$RUNNER_TEMP/macdown-sass"
+          mkdir -p "$sass_root"
+          npm install --prefix "$sass_root" --no-package-lock --no-save sass@1.77.8 primer-markdown@4.0.0
+          "$sass_root/node_modules/.bin/sass" \
+            --load-path "$sass_root/node_modules" \
+            Tools/GitHub-style-generator/index.sass \
+            | sed 's/.markdown-body/body/' \
+            > MacDown/Resources/Styles/GitHub-2020.css
+          test -s MacDown/Resources/Styles/GitHub-2020.css
+
+      - name: Set release bundle metadata
+        run: |
+          set -euo pipefail
+          plist=MacDown/MacDown-Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $RELEASE_VERSION" "$plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $RELEASE_BUILD" "$plist"
+          /usr/libexec/PlistBuddy -c "Add :CFBundleBuildVersion string $GITHUB_SHA" "$plist" 2>/dev/null \
+            || /usr/libexec/PlistBuddy -c "Set :CFBundleBuildVersion $GITHUB_SHA" "$plist"
+
+      - name: Archive universal Release build with ad-hoc signing
+        run: |
+          set -euo pipefail
+          xcodebuild archive \
+            -workspace MacDown.xcworkspace \
+            -scheme MacDown \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -archivePath "$ARCHIVE_PATH" \
+            ARCHS='arm64 x86_64' \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGN_IDENTITY='-' \
+            CODE_SIGNING_REQUIRED=YES
+
+      - name: Verify application bundle
+        run: |
+          set -euo pipefail
+          app="$ARCHIVE_PATH/Products/Applications/MacDown.app"
+          executable="$app/Contents/MacOS/MacDown"
+          info="$app/Contents/Info.plist"
+          test -d "$app"
+          codesign --verify --deep --strict --verbose=4 "$app"
+          version="$(plutil -extract CFBundleShortVersionString raw -o - "$info")"
+          test "$version" = "$RELEASE_VERSION"
+          deployment="$(otool -l "$executable" | awk '/LC_BUILD_VERSION/{found=1} found && /minos/{print $2; exit}')"
+          test "$deployment" = "11.0"
+          archs="$(lipo -archs "$executable")"
+          case " $archs " in *' arm64 '*) ;; *) exit 1 ;; esac
+          case " $archs " in *' x86_64 '*) ;; *) exit 1 ;; esac
+          {
+            echo "version=$version"
+            echo "build=$(plutil -extract CFBundleVersion raw -o - "$info")"
+            echo "deployment_target=$deployment"
+            echo "architectures=$archs"
+            codesign -dvvv "$app" 2>&1
+          } | tee "$RUNNER_TEMP/verification.txt"
+
+      - name: Create and verify DMG
+        run: |
+          set -euo pipefail
+          app="$ARCHIVE_PATH/Products/Applications/MacDown.app"
+          stage="$RUNNER_TEMP/dmg-root"
+          mount="$RUNNER_TEMP/dmg-mount"
+          mkdir -p "$stage" "$mount" "$DIST_DIR"
+          ditto "$app" "$stage/MacDown.app"
+          ln -s /Applications "$stage/Applications"
+          hdiutil create \
+            -volname "MacDown $RELEASE_VERSION" \
+            -srcfolder "$stage" \
+            -format UDZO \
+            -ov \
+            "$DIST_DIR/$DMG_NAME"
+          hdiutil verify "$DIST_DIR/$DMG_NAME"
+          device="$(hdiutil attach "$DIST_DIR/$DMG_NAME" -nobrowse -readonly -mountpoint "$mount" | awk '/^\/dev\//{print $1; exit}')"
+          cleanup() { hdiutil detach "$device" || true; }
+          trap cleanup EXIT
+          test -d "$mount/MacDown.app"
+          test -L "$mount/Applications"
+          codesign --verify --deep --strict --verbose=4 "$mount/MacDown.app"
+          test "$(plutil -extract CFBundleShortVersionString raw -o - "$mount/MacDown.app/Contents/Info.plist")" = "$RELEASE_VERSION"
+          mounted_archs="$(lipo -archs "$mount/MacDown.app/Contents/MacOS/MacDown")"
+          case " $mounted_archs " in *' arm64 '*) ;; *) exit 1 ;; esac
+          case " $mounted_archs " in *' x86_64 '*) ;; *) exit 1 ;; esac
+          hdiutil detach "$device"
+          trap - EXIT
+          (cd "$DIST_DIR" && shasum -a 256 "$DMG_NAME" > "$DMG_NAME.sha256")
+          cp "$RUNNER_TEMP/verification.txt" "$DIST_DIR/verification.txt"
+
+      - name: Upload verified release candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: MacDown-0.8.0-unsigned
+          path: ${{ runner.temp }}/dist/*
+          if-no-files-found: error
+          retention-days: 30
