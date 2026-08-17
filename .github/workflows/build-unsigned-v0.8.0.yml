@@ -29,11 +29,15 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Select Ruby and install bundled gems
+      - name: Select Ruby
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: "3.3"
-          bundler-cache: true
+
+      - name: Install Bundler dependencies
+        run: |
+          set -euo pipefail
+          bundle install
 
       - name: Report build environment
         run: |
