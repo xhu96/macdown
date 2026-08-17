@@ -22,8 +22,6 @@ jobs:
       RELEASE_VERSION: 0.8.0
       RELEASE_BUILD: 1118
       DMG_NAME: MacDown-0.8.0-unsigned.dmg
-      ARCHIVE_PATH: ${{ runner.temp }}/MacDown.xcarchive
-      DIST_DIR: ${{ runner.temp }}/dist
 
     steps:
       - name: Check out source and submodules
@@ -82,6 +80,7 @@ jobs:
       - name: Archive universal Release build with ad-hoc signing
         run: |
           set -euo pipefail
+          ARCHIVE_PATH="$RUNNER_TEMP/MacDown.xcarchive"
           xcodebuild archive \
             -workspace MacDown.xcworkspace \
             -scheme MacDown \
@@ -96,6 +95,7 @@ jobs:
       - name: Verify application bundle
         run: |
           set -euo pipefail
+          ARCHIVE_PATH="$RUNNER_TEMP/MacDown.xcarchive"
           app="$ARCHIVE_PATH/Products/Applications/MacDown.app"
           executable="$app/Contents/MacOS/MacDown"
           info="$app/Contents/Info.plist"
@@ -119,6 +119,8 @@ jobs:
       - name: Create and verify DMG
         run: |
           set -euo pipefail
+          ARCHIVE_PATH="$RUNNER_TEMP/MacDown.xcarchive"
+          DIST_DIR="$RUNNER_TEMP/dist"
           app="$ARCHIVE_PATH/Products/Applications/MacDown.app"
           stage="$RUNNER_TEMP/dmg-root"
           mount="$RUNNER_TEMP/dmg-mount"
