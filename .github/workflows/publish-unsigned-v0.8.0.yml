@@ -1,0 +1,101 @@
+name: Publish v0.8.0
+
+on:
+  push:
+    branches:
+      - codex/release-v0.8.0
+    paths:
+      - .github/workflows/publish-unsigned-v0.8.0.yml
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: v0.8.0
+      RELEASE_COMMIT: 9aba4a40f60c023e3375ad9c7337de5ffaa6005d
+      BUILD_WORKFLOW: build-unsigned-v0.8.0.yml
+      ARTIFACT_NAME: MacDown-0.8.0-unsigned
+      DMG_NAME: MacDown-0.8.0-unsigned.dmg
+
+    steps:
+      - name: Refuse to overwrite an existing tag or release
+        run: |
+          set -euo pipefail
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Tag $RELEASE_TAG already exists" >&2
+            exit 1
+          fi
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists" >&2
+            exit 1
+          fi
+
+      - name: Download the latest successful verified build artifact
+        run: |
+          set -euo pipefail
+          run_id="$(gh run list \
+            --repo "$GITHUB_REPOSITORY" \
+            --workflow "$BUILD_WORKFLOW" \
+            --branch codex/release-v0.8.0 \
+            --status success \
+            --limit 1 \
+            --json databaseId \
+            --jq '.[0].databaseId')"
+          test -n "$run_id"
+          mkdir -p dist
+          gh run download "$run_id" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "$ARTIFACT_NAME" \
+            --dir dist
+
+      - name: Verify release files and source target
+        run: |
+          set -euo pipefail
+          test -f "dist/$DMG_NAME"
+          test -f "dist/$DMG_NAME.sha256"
+          (cd dist && sha256sum -c "$DMG_NAME.sha256")
+          target="$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_COMMIT" --jq .sha)"
+          test "$target" = "$RELEASE_COMMIT"
+
+      - name: Write release notes
+        run: |
+          cat <<'NOTES' | sed 's/^[ ]\{10\}//' > release-notes.md
+          ## MacDown 0.8.0
+
+          This is the first release of the modernized MacDown fork for macOS 11 and later.
+
+          Highlights:
+
+          - Universal Apple Silicon and Intel application (`arm64` and `x86_64`).
+          - Updated project settings for modern macOS SDKs and Xcode.
+          - Sparkle 2 integration, with automatic updates disabled until an appcast and public key are configured.
+          - Restored rendering preferences layout and removed stale terminal preference outlets.
+          - Albanian localization.
+          - CocoaPods dependency refresh.
+
+          ### Important security notice
+
+          `MacDown-0.8.0-unsigned.dmg` is ad-hoc signed only. It is **not** signed with an Apple Developer ID and is **not notarized by Apple**. macOS Gatekeeper may prevent a normal double-click launch. Only download and open it if you trust this repository and understand that limitation.
+
+          Source commit: `9aba4a40f60c023e3375ad9c7337de5ffaa6005d`.
+
+          GitHub provides the source code ZIP and tarball automatically below. The attached SHA-256 file verifies the DMG download.
+          NOTES
+
+      - name: Create tag and publish release with verified assets
+        run: |
+          set -euo pipefail
+          gh release create "$RELEASE_TAG" \
+            "dist/$DMG_NAME" \
+            "dist/$DMG_NAME.sha256" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$RELEASE_COMMIT" \
+            --title "MacDown 0.8.0" \
+            --notes-file release-notes.md \
+            --latest
